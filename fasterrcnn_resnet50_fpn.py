@@ -39,7 +39,7 @@ train_dir = './new_train'
 test_dir = './test'
 annotation_file = './annotations/instances_default.json'
 
-
+11
 class COCODataset(Dataset):
     def __init__(self, root, annotation_file, transforms=None):
         self.root = root
@@ -130,17 +130,19 @@ def main():
     params = [p for p in model.parameters() if p.requires_grad]
     #optimizer = torch.optim.Adadelta(params, lr=0.1, weight_decay=0.0001)
     #optimizer = torch.optim.SGD(params, lr=0.1, momentum=0.9, weight_decay=0.0001)# 실패
-    #optimizer = torch.optim.AdamW(params, lr=0.01, weight_decay=0.0001)#실패
+    optimizer = torch.optim.AdamW(params, lr=0.001, weight_decay=0.0001)
     #optimizer = torch.optim.RMSprop(params, lr=0.0001, weight_decay=0.0001, momentum=0.9)#실패
-    optimizer = torch.optim.Adagrad(params, lr=0.01, weight_decay=0.0001)#값 너무튐
-    # optimizer = torch.optim.Adamax(params, lr=0.002, weight_decay=0.0001)
+    #optimizer = torch.optim.Adagrad(params, lr=0.01, weight_decay=0.0001)#값 너무튐
+    #optimizer = torch.optim.Adamax(params, lr=0.002, weight_decay=0.0001)
     # optimizer = torch.optim.NAdam(params, lr=0.0001, weight_decay=0.0001)실패
 
     # #스케쥴러 시도
     # optimizer = torch.optim.SGD(params, lr=0.01, momentum=0.9, weight_decay=0.0001)
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    # 스케줄러 설정
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=1, eta_min=0)
 
-    # optimizer = torch.optim.Adadelta(params, lr=1.0, weight_decay=0.0001)
+    #optimizer = torch.optim.Adadelta(params, lr=0.1, weight_decay=0.0001)
     len_dataloader = len(train_loader)
 
     # 손실 값을 저장할 리스트
@@ -188,6 +190,10 @@ def main():
 
             running_loss += losses.item()
             print(f'Epoch: {epoch + 1}, Iteration: {i}/{len_dataloader}, Loss: {losses.item()}')
+
+
+        # 학습률 스케줄러 업데이트
+        scheduler.step()
 
         # epoch당 평균 손실 값 저장
         epoch_loss = running_loss / i
@@ -247,15 +253,18 @@ def predict(model, img, threshold=0.5):
     pred_labels = pred_labels[pred_scores >= threshold]
     return pred_boxes, pred_labels
 
-def draw_boxes(img_path, boxes, labels, class_names):
+def draw_circles(img_path, boxes, labels, class_names):
     img = cv2.imread(img_path)
     for box, label in zip(boxes, labels):
         x1, y1, x2, y2 = box
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(img, class_names[label], (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
-        # 박스 좌표를 터미널에 출력
-        print(f"Detected {class_names[label]} at Box: ({x1}, {y1}), ({x2}, {y2})")
+        center = (int((x1 + x2) / 2), int((y1 + y2) / 2))
+        radius = int(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5 / 2)
+        cv2.circle(img, center, radius, (0, 255, 0), 2)
+        #cv2.putText(img, class_names[label], (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+        # 동그라미 정보를 터미널에 출력
+        print(f"Detected {class_names[label]} at Circle: Center({center[0]}, {center[1]}), Radius({radius})")
     return img
+
 
 def main_test():
     test_images = glob.glob(os.path.join(test_dir, '*.jpg'))
@@ -266,8 +275,8 @@ def main_test():
 
     for img_path in test_images:
         img = Image.open(img_path).convert('RGB')
-        boxes, labels = predict(model, img, threshold=0.1)
-        result_img = draw_boxes(img_path, boxes, labels, class_names)
+        boxes, labels = predict(model, img, threshold=0.3)
+        result_img = draw_circles(img_path, boxes, labels, class_names)
         cv2.imshow("Object Detection", result_img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
