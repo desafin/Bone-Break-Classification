@@ -217,5 +217,58 @@ def main():
     plt.ioff()
     plt.show()
 
+import cv2
+import numpy as np
+from PIL import Image
+
+def load_model(model_path, num_classes):
+    model = get_model_instance_segmentation(num_classes)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.to(device)
+    model.eval()
+    return model
+
+def predict(model, img, threshold=0.5):
+    transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    img = transform(img).unsqueeze(0).to(device)
+    with torch.no_grad():
+        prediction = model(img)
+
+    pred_boxes = prediction[0]['boxes'].cpu().numpy()
+    pred_scores = prediction[0]['scores'].cpu().numpy()
+    pred_labels = prediction[0]['labels'].cpu().numpy()
+
+    pred_boxes = pred_boxes[pred_scores >= threshold].astype(int)
+    pred_labels = pred_labels[pred_scores >= threshold]
+    return pred_boxes, pred_labels
+
+def draw_boxes(img_path, boxes, labels, class_names):
+    img = cv2.imread(img_path)
+    for box, label in zip(boxes, labels):
+        x1, y1, x2, y2 = box
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(img, class_names[label], (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+    return img
+
+def main_test():
+    test_images = glob.glob(os.path.join(test_dir, '*.jpg'))
+    num_classes = 2
+    model_path = 'best_model.pth'
+    model = load_model(model_path, num_classes)
+    class_names = {1: 'bone_break'}  # 클래스 이름 설정
+
+    for img_path in test_images:
+        img = Image.open(img_path).convert('RGB')
+        boxes, labels = predict(model, img, threshold=0.1)
+        result_img = draw_boxes(img_path, boxes, labels, class_names)
+        cv2.imshow("Object Detection", result_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
 if __name__ == "__main__":
     main()
