@@ -253,6 +253,8 @@ def draw_boxes(img_path, boxes, labels, class_names):
         x1, y1, x2, y2 = box
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(img, class_names[label], (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36, 255, 12), 2)
+        # 박스 좌표를 터미널에 출력
+        print(f"Detected {class_names[label]} at Box: ({x1}, {y1}), ({x2}, {y2})")
     return img
 
 def main_test():
@@ -271,4 +273,4 @@ def main_test():
         cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    main()
+    main_test()
